@@ -1,0 +1,24 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routes import event_series, events, ticket_types, discounts, orders, check_ins
+
+app = FastAPI(title="Ticket Tailor Event Management API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allow all for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(event_series.router)
+app.include_router(events.router)
+app.include_router(ticket_types.router)
+app.include_router(discounts.router)
+app.include_router(orders.router)
+app.include_router(check_ins.router)
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to Ticket Tailor EMS Backend"}
