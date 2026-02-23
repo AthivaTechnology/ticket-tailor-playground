@@ -65,7 +65,7 @@ const Events = () => {
         setLoading(true);
         try {
             if (editingId) {
-                await api.put(`/ events / ${editingId} `, formData);
+                await api.put(`/events/${editingId}`, formData);
             } else {
                 await api.post('/events', formData);
             }
@@ -107,7 +107,7 @@ const Events = () => {
     const confirmDelete = async () => {
         if (!deleteConfirmId) return;
         try {
-            await api.delete(`/ events / ${deleteConfirmId} `);
+            await api.delete(`/events/${deleteConfirmId}`);
             setDeleteConfirmId(null);
             fetchEvents();
         } catch (err) {

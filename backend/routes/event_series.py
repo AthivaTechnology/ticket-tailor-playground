@@ -129,7 +129,7 @@ def list_bundles(series_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{series_id}/bundles/availability")
-def list_bundles_with_availability(series_id: str):
+def list_bundles_with_availability(series_id: str, event_id: Optional[str] = None):
     """
     Returns all bundles for the series, enriched with live availability
     calculated from included ticket inventory.
@@ -151,19 +151,25 @@ def list_bundles_with_availability(series_id: str):
         if not bundles:
             return {"data": []}
 
-        # 2. Build a map of ticket_type_id -> available quantity from this series' events
+        # 2. Build a map of ticket_type_id -> available quantity and name
         tt_inventory: dict[str, int] = {}
+        tt_names: dict[str, str] = {}
         try:
-            events_resp = fetch_from_tt(f"/event_series/{series_id}/events")
-            for event in events_resp.get("data", []):
-                for tt in event.get("ticket_types", []):
+            if event_id:
+                # Fetch inventory ONLY for the specific event occurrence
+                event_resp = fetch_from_tt(f"/events/{event_id}")
+                for tt in event_resp.get("ticket_types", []):
                     tid = tt["id"]
-                    # "quantity" field in TT = current remaining stock
                     qty_remaining = tt.get("quantity", 0)
-                    # Aggregate across all occurrences (cumulate available stock)
-                    tt_inventory[tid] = tt_inventory.get(tid, 0) + qty_remaining
+                    tt_inventory[tid] = qty_remaining
+                    tt_names[tid] = tt.get("name", "Unknown Ticket")
+            else:
+                # If no specific event is provided, we rely purely on the series template
+                # via `default_ticket_types` below. We no longer aggregate all occurrences
+                # because it causes ballooned/confusing "Max Purchasable" bundle numbers.
+                pass
         except Exception:
-            pass  # fall back to marking all as unknown availability
+            pass  # fall back
 
         # Also check series-level default ticket types
         try:
@@ -172,6 +178,8 @@ def list_bundles_with_availability(series_id: str):
                 tid = tt["id"]
                 if tid not in tt_inventory:
                     tt_inventory[tid] = tt.get("quantity", 0)
+                if tid not in tt_names:
+                    tt_names[tid] = tt.get("name", "Unknown Ticket")
         except Exception:
             pass
 
@@ -216,9 +224,15 @@ def list_bundles_with_availability(series_id: str):
                 **bundle,
                 "is_available": all_available,
                 "max_quantity": min_purchasable if min_purchasable is not None else 0,
-                "ticket_inventory": {
-                    inc["id"]: tt_inventory.get(inc["id"]) for inc in included_tickets
-                }
+                "included_tickets_details": [
+                    {
+                        "id": inc["id"],
+                        "name": tt_names.get(inc["id"], "Included Ticket"),
+                        "quantity": inc.get("quantity", 1),
+                        "left": tt_inventory.get(inc["id"], 0)
+                    }
+                    for inc in included_tickets
+                ]
             })
 
         return {"data": enriched}

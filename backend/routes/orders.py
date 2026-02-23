@@ -4,13 +4,18 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
+from typing import List, Optional
+
+class OrderItem(BaseModel):
+    ticket_type_id: str
+    quantity: int = 1
+
 class OrderCreate(BaseModel):
     event_id: str
-    ticket_type_id: str
     buyer_email: str
     buyer_name: str
-    quantity: int = 1
-    # Other payload for checkout
+    phone: Optional[str] = None
+    items: List[OrderItem]
 
 @router.get("/")
 def list_orders():
@@ -25,17 +30,19 @@ def create_order(order: OrderCreate):
         # Ticket Tailor doesn't allow POST /orders directly.
         # It allows POST /issued_tickets to generate an order/ticket.
         issued_tickets = []
-        payload = {
-            "event_id": order.event_id,
-            "ticket_type_id": order.ticket_type_id,
-            "full_name": order.buyer_name,
-            "email": order.buyer_email,
-            # we could also pass custom_questions or notes if we had discount codes
-        }
-        
-        for _ in range(order.quantity):
-            data = post_to_tt("/issued_tickets", payload)
-            issued_tickets.append(data)
+        for item in order.items:
+            payload = {
+                "event_id": order.event_id,
+                "ticket_type_id": item.ticket_type_id,
+                "full_name": order.buyer_name,
+                "email": order.buyer_email,
+            }
+            if order.phone:
+                payload["phone"] = order.phone
+                
+            for _ in range(item.quantity):
+                data = post_to_tt("/issued_tickets", payload)
+                issued_tickets.append(data)
             
         return {"data": issued_tickets}
     except Exception as e:

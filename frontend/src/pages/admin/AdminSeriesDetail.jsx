@@ -122,14 +122,24 @@ const AdminSeriesDetail = () => {
         setShowBundleModal(true);
     };
 
-    const ticketChartData = defaultTickets.map(t => {
-        const total = t.quantity_total || 0;
-        const remaining = t.quantity || 0;
-        const sold = Math.max(0, total - remaining);
+    // Aggregate tickets across ALL occurrences to show true Series-wide inventory status
+    const aggregatedTickets = {};
+    occurrences.forEach(evt => {
+        (evt.ticket_types || []).forEach(t => {
+            if (!aggregatedTickets[t.id]) {
+                aggregatedTickets[t.id] = { name: t.name, total: 0, remaining: 0 };
+            }
+            aggregatedTickets[t.id].total += (t.quantity_total || t.quantity || 0);
+            aggregatedTickets[t.id].remaining += (t.quantity || 0);
+        });
+    });
+
+    const ticketChartData = Object.values(aggregatedTickets).map(t => {
+        const sold = Math.max(0, t.total - t.remaining);
         return {
             name: t.name,
             Sold: sold,
-            Remaining: remaining,
+            Remaining: t.remaining,
         };
     });
 
@@ -194,10 +204,10 @@ const AdminSeriesDetail = () => {
 
             {/* ── Charts Row ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Default Ticket Inventory */}
+                {/* Total Series Ticket Inventory */}
                 {ticketChartData.length > 0 ? (
                     <div className="glass-card p-6">
-                        <h2 className="text-lg font-bold text-white mb-4">Default Ticket Inventory</h2>
+                        <h2 className="text-lg font-bold text-white mb-4">Total Series Inventory (All Occurrences)</h2>
                         <ResponsiveContainer width="100%" height={280}>
                             <BarChart data={ticketChartData} barCategoryGap="30%" margin={{ top: 5, right: 10, left: 0, bottom: 60 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />

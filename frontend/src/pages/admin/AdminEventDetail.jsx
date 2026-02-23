@@ -27,6 +27,7 @@ const AdminEventDetail = () => {
     const { id } = useParams();
     const [event, setEvent] = useState(null);
     const [seriesId, setSeriesId] = useState(null);
+    const [bundles, setBundles] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -37,8 +38,18 @@ const AdminEventDetail = () => {
         setLoading(true);
         try {
             const res = await api.get(`/events/${id}`);
-            setEvent(res.data);
-            setSeriesId(res.data.event_series_id);
+            const eventData = res.data;
+            setEvent(eventData);
+            setSeriesId(eventData.event_series_id);
+
+            if (eventData.event_series_id) {
+                try {
+                    const bundleRes = await api.get(`/event_series/${eventData.event_series_id}/bundles/availability?event_id=${eventData.id}`);
+                    setBundles(bundleRes.data.data || []);
+                } catch (bErr) {
+                    console.warn("No bundles found:", bErr);
+                }
+            }
         } catch (err) {
             console.error("Failed to fetch event data:", err);
         }
@@ -308,6 +319,61 @@ const AdminEventDetail = () => {
                     </table>
                 </div>
             </div>
+            {/* ── Ticket Bundles Table (if any) ── */}
+            {bundles.length > 0 && (
+                <div>
+                    <h2 className="text-xl font-bold mt-8 mb-4 text-brand-300 flex items-center gap-2">
+                        <Ticket className="w-5 h-5" /> Active Ticket Bundles (This Occurrence)
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {bundles.map(b => (
+                            <div key={b.id} className={`glass-card p-5 flex flex-col justify-between transition-opacity ${b.is_available ? 'border-l-4 border-l-brand-400' : 'border-l-4 border-l-red-500 opacity-70'}`}>
+                                <div>
+                                    <div className="flex items-start justify-between mb-2">
+                                        <h3 className="text-lg font-bold text-white">{b.name}</h3>
+                                        <span className={`shrink-0 ml-2 px-2 py-0.5 rounded-full text-xs font-bold uppercase ${b.is_available
+                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                            }`}>
+                                            {b.is_available ? '✓ Available' : '✗ Unavailable'}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-400 mb-3">{b.description}</p>
+                                    <div className="flex items-end justify-between mb-4">
+                                        <div className="text-2xl font-bold text-brand-300">${(b.price / 100).toFixed(2)}</div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-500 uppercase font-semibold">Max Purchasable</p>
+                                            <p className={`text-xl font-bold ${b.max_quantity > 0 ? 'text-white' : 'text-red-400'}`}>{b.max_quantity}</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 mb-2">
+                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Includes:</p>
+                                        {(b.ticket_types || []).map(tt => {
+                                            const ticketName = tickets.find(dt => dt.id === tt.id)?.name || tt.id;
+                                            const stock = b.ticket_inventory?.[tt.id];
+                                            const hasEnough = stock !== null && stock !== undefined && stock >= tt.quantity;
+                                            return (
+                                                <div key={tt.id} className="text-sm font-medium flex justify-between items-center bg-white/5 px-2 py-1.5 rounded">
+                                                    <span className="text-gray-300">{ticketName}</span>
+                                                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                                                        <span className="text-gray-400">x{tt.quantity}</span>
+                                                        {stock !== undefined && (
+                                                            <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${hasEnough ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                                                }`}>
+                                                                {stock} left
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

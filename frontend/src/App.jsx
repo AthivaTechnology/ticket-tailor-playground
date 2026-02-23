@@ -17,6 +17,7 @@ import CheckInScanner from './pages/admin/CheckInScanner';
 
 import UserEvents from './pages/user/EventsList';
 import UserEventDetail from './pages/user/EventDetail';
+import EventCheckout from './pages/user/EventCheckout';
 
 const App = () => {
   return (
@@ -42,6 +43,7 @@ const App = () => {
           <Route path="events/:id" element={<Navigate to="/series" replace />} />
           <Route path="series" element={<UserEvents />} />
           <Route path="series/:id" element={<UserEventDetail />} />
+          <Route path="checkout/:id" element={<EventCheckout />} />
           <Route path="*" element={<Navigate to="/series" replace />} />
         </Route>
       </Routes>

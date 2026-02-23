@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, Tag as TagIcon, ArrowRight, Ticket, Users } from 'lucide-react';
+import { Calendar, MapPin, Tag as TagIcon, ArrowRight, Ticket } from 'lucide-react';
 import api from '../../services/api';
 
 const EventDetail = () => {
@@ -16,18 +16,6 @@ const EventDetail = () => {
 
     useEffect(() => {
         fetchSeriesData();
-
-        // Dynamically inject Ticket Tailor's Pop-up Widget Engine
-        const script = document.createElement("script");
-        script.src = "https://cdn.tickettailor.com/js/widgets/min/widget.js";
-        script.async = true;
-        document.body.appendChild(script);
-
-        return () => {
-            if (document.body.contains(script)) {
-                document.body.removeChild(script);
-            }
-        };
     }, [id]);
 
     const fetchSeriesData = async () => {
@@ -44,14 +32,6 @@ const EventDetail = () => {
             // Sort occurrences chronologically
             matchingOccurrences.sort((a, b) => new Date(a.start.iso) - new Date(b.start.iso));
             setOccurrences(matchingOccurrences);
-
-            // 3. Fetch Series Bundles
-            try {
-                const bundleRes = await api.get(`/event_series/${id}/bundles/availability`);
-                setBundles(bundleRes.data.data || []);
-            } catch (bErr) {
-                console.warn("No bundles found or supported:", bErr);
-            }
 
             if (matchingOccurrences.length > 0) {
                 setSelectedOccurrenceId(matchingOccurrences[0].id);
@@ -74,6 +54,16 @@ const EventDetail = () => {
                 console.error("Failed to fetch event ticket inventory", err);
                 setAvailableTickets([]);
             }
+
+            // Fetch Bundles filtered to this specific occurrence
+            try {
+                const bundleRes = await api.get(`/event_series/${id}/bundles/availability?event_id=${selectedOccurrenceId}`);
+                setBundles(bundleRes.data.data || []);
+            } catch (bErr) {
+                console.warn("No bundles found or supported:", bErr);
+                setBundles([]);
+            }
+
             setTicketsLoading(false);
         };
         fetchTickets();
@@ -146,33 +136,56 @@ const EventDetail = () => {
                         {/* Series Ticket Bundles */}
                         {bundles.length > 0 && (
                             <div className="mt-8 mb-8">
-                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">Series Ticket Bundles</h4>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <TagIcon className="w-3.5 h-3.5" /> Ticket Bundles
+                                </h4>
                                 <div className="space-y-3">
                                     {bundles.map(bundle => (
-                                        <div key={bundle.id} className="flex items-center justify-between p-3 rounded-lg bg-indigo-900/20 border border-indigo-500/30 hover:border-brand-500/50 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded-full bg-indigo-500/20 text-indigo-400">
-                                                    <TagIcon className="w-5 h-5" />
-                                                </div>
+                                        <div key={bundle.id} className={`rounded-xl border p-4 transition-all ${bundle.is_available
+                                            ? 'bg-indigo-950/40 border-indigo-500/30 hover:border-indigo-400/60'
+                                            : 'bg-dark-900/30 border-white/5 opacity-60'
+                                            }`}>
+                                            {/* Bundle Header */}
+                                            <div className="flex justify-between items-start mb-3">
                                                 <div>
-                                                    <p className="font-bold text-white">{bundle.name}</p>
-                                                    <p className="text-xs text-indigo-300 mb-1">{bundle.description}</p>
-                                                    <p className="text-sm font-medium text-brand-300">{bundle.price > 0 ? `₹${(bundle.price / 100).toFixed(2)}` : 'Free'}</p>
+                                                    <p className="font-bold text-white text-sm">{bundle.name}</p>
+                                                    {bundle.description && (
+                                                        <p className="text-xs text-indigo-300/70 mt-0.5">{bundle.description}</p>
+                                                    )}
                                                 </div>
-                                            </div>
-
-                                            <div className="flex flex-col items-end">
                                                 {bundle.is_available ? (
-                                                    <div className="text-right">
-                                                        <span className="text-sm font-bold text-green-400">Available</span>
-                                                        <div className="text-xs text-gray-400 mt-0.5">
-                                                            Limit {bundle.max_quantity}
-                                                        </div>
-                                                    </div>
+                                                    <span className="shrink-0 ml-2 text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full">
+                                                        {bundle.max_quantity} left
+                                                    </span>
                                                 ) : (
-                                                    <span className="text-xs font-bold text-red-400 uppercase tracking-wide bg-red-400/10 px-2 py-1 rounded">Sold Out</span>
+                                                    <span className="shrink-0 ml-2 text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                                        Sold Out
+                                                    </span>
                                                 )}
                                             </div>
+
+                                            {/* Included Tickets */}
+                                            {bundle.included_tickets_details && bundle.included_tickets_details.length > 0 && (
+                                                <div className="bg-indigo-900/20 rounded-lg p-2.5 mb-3 space-y-1.5">
+                                                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1.5">Includes</p>
+                                                    {bundle.included_tickets_details.map(t => (
+                                                        <div key={t.id} className="flex items-center justify-between text-xs">
+                                                            <div className="flex items-center gap-1.5 text-indigo-200">
+                                                                <span className="w-4 h-4 flex items-center justify-center bg-indigo-500/20 rounded text-indigo-400 text-[10px] font-bold">×{t.quantity}</span>
+                                                                <span>{t.name}</span>
+                                                            </div>
+                                                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${t.left > 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                                                {t.left > 0 ? `${t.left} left` : 'None left'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Price */}
+                                            <p className="text-sm font-bold text-brand-300">
+                                                {bundle.price > 0 ? `₹${(bundle.price / 100).toFixed(2)}` : 'Free'}
+                                            </p>
                                         </div>
                                     ))}
                                 </div>
@@ -181,59 +194,77 @@ const EventDetail = () => {
 
                         {/* Ticket Inventory Preview */}
                         {selectedOccurrenceId && (
-                            <div className="mt-8">
-                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">Available Tickets</h4>
+                            <div className="mt-4">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <Ticket className="w-3.5 h-3.5" /> Available Tickets
+                                </h4>
                                 {ticketsLoading ? (
-                                    <div className="animate-pulse space-y-3">
-                                        <div className="h-12 bg-white/5 rounded-lg"></div>
-                                        <div className="h-12 bg-white/5 rounded-lg"></div>
+                                    <div className="animate-pulse space-y-2">
+                                        <div className="h-14 bg-white/5 rounded-xl"></div>
+                                        <div className="h-14 bg-white/5 rounded-xl"></div>
                                     </div>
                                 ) : availableTickets.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {availableTickets.map(ticket => (
-                                            <div key={ticket.id} className="flex items-center justify-between p-3 rounded-lg bg-dark-800/50 border border-white/5 hover:border-brand-500/30 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-full ${ticket.price > 0 ? 'bg-brand-500/20 text-brand-400' : 'bg-green-500/20 text-green-400'}`}>
-                                                        <Ticket className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-white">{ticket.name}</p>
-                                                        <p className="text-xs text-gray-400">{ticket.price > 0 ? `₹${(ticket.price / 100).toFixed(2)}` : 'Free Registration'}</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col items-end">
-                                                    {ticket.status === 'sold_out' ? (
-                                                        <span className="text-xs font-bold text-red-400 uppercase tracking-wide bg-red-400/10 px-2 py-1 rounded">Sold Out</span>
-                                                    ) : (
-                                                        <div className="text-right">
-                                                            <span className="text-sm font-bold text-brand-300">Available</span>
-                                                            <div className="flex items-center gap-1 text-xs text-brand-200 mt-0.5 opacity-70">
-                                                                <Users className="w-3 h-3" /> Max {ticket.max_per_order} / order
-                                                            </div>
+                                    <div className="space-y-2">
+                                        {availableTickets.map(ticket => {
+                                            const isSoldOut = ticket.status === 'sold_out';
+                                            const qty = ticket.quantity ?? null;
+                                            return (
+                                                <div key={ticket.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isSoldOut
+                                                    ? 'bg-dark-900/30 border-white/5 opacity-60'
+                                                    : 'bg-dark-800/60 border-white/8 hover:border-brand-500/30'
+                                                    }`}>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className={`p-1.5 rounded-lg ${isSoldOut ? 'bg-gray-500/10 text-gray-500'
+                                                            : ticket.price > 0 ? 'bg-brand-500/15 text-brand-400'
+                                                                : 'bg-green-500/15 text-green-400'
+                                                            }`}>
+                                                            <Ticket className="w-4 h-4" />
                                                         </div>
-                                                    )}
+                                                        <div>
+                                                            <p className={`text-sm font-semibold leading-tight ${isSoldOut ? 'text-gray-500 line-through' : 'text-white'}`}>{ticket.name}</p>
+                                                            <p className="text-xs text-gray-400">{ticket.price > 0 ? `₹${(ticket.price / 100).toFixed(2)}` : 'Free'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        {isSoldOut ? (
+                                                            <span className="text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">Sold Out</span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full">Available</span>
+                                                                {qty !== null && (
+                                                                    <span className="text-[10px] text-gray-400">{qty} left</span>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-gray-500 italic text-center py-4 bg-dark-900 rounded-lg border border-white/5">No tickets found for this date.</p>
+                                    <p className="text-sm text-gray-500 italic text-center py-4 bg-dark-900 rounded-xl border border-white/5">No tickets found for this date.</p>
                                 )}
                             </div>
                         )}
 
-                        <div className="mt-8 pt-6 border-t border-white/10 flex flex-col items-center">
+                        <div className="mt-8 pt-6 border-t border-white/10 flex flex-col items-center gap-4">
                             {selectedOccurrenceObj ? (
-                                <a
-                                    href={selectedOccurrenceObj.checkout_url || selectedOccurrenceObj.url}
-                                    className="tt-widget w-full flex justify-center items-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold text-lg px-8 py-4 rounded-xl shadow-[0_4px_20px_rgba(37,99,235,0.3)] hover:-translate-y-0.5 transition-all duration-300"
-                                    data-show-logo="false"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    <TagIcon className="w-5 h-5" /> Find Tickets Now
-                                </a>
+                                <div className="flex flex-col sm:flex-row w-full gap-4">
+                                    <a
+                                        href={selectedOccurrenceObj.checkout_url || selectedOccurrenceObj.url}
+                                        className="w-full sm:w-1/2 flex justify-center items-center gap-3 bg-dark-700 hover:bg-dark-600 border border-white/10 text-white font-bold text-base px-6 py-4 rounded-xl transition-all duration-300"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <TagIcon className="w-5 h-5" /> Ticket Tailor Checkout
+                                    </a>
+                                    <button
+                                        onClick={() => navigate(`/checkout/${selectedOccurrenceId}`)}
+                                        className="w-full sm:w-1/2 flex justify-center items-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold text-base px-6 py-4 rounded-xl shadow-[0_4px_20px_rgba(37,99,235,0.3)] hover:-translate-y-0.5 transition-all duration-300"
+                                    >
+                                        <TagIcon className="w-5 h-5" /> Custom Onsite Checkout
+                                    </button>
+                                </div>
                             ) : (
                                 <div className="w-full flex justify-center items-center gap-2 bg-gray-600/50 cursor-not-allowed text-gray-400 font-bold text-sm px-6 py-4 rounded-xl border border-white/5">
                                     <TagIcon className="w-4 h-4" /> Select Date First
@@ -242,8 +273,8 @@ const EventDetail = () => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 
