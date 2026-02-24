@@ -24,19 +24,40 @@ def fetch_from_tt(endpoint: str, params: dict = None):
 
 def post_to_tt(endpoint: str, data: dict):
     url = f"{BASE_URL}{endpoint}"
-    # Ticket Tailor uses form data for POST requests usually, but let's check their docs or just send json
-    # Many TT endpoints accept form-urlencoded. Let's send as json first, then fallback to data if needed.
-    # Actually, TT standard API uses form-urlencoded for POST.
+    # Ticket Tailor standard API uses form-urlencoded for POST
     headers = {"Accept": "application/json"}
     response = requests.post(url, headers=headers, auth=get_auth(), data=data)
-    response.raise_for_status()
+
+    if not response.ok:
+        # Surface the actual Ticket Tailor error message
+        try:
+            err_body = response.json()
+            tt_message = err_body.get("message") or err_body.get("error") or str(err_body)
+        except Exception:
+            tt_message = response.text or f"HTTP {response.status_code}"
+        raise requests.HTTPError(
+            f"Ticket Tailor API [{response.status_code}]: {tt_message}",
+            response=response,
+        )
+
     return response.json()
+
 
 def put_to_tt(endpoint: str, data: dict):
     url = f"{BASE_URL}{endpoint}"
     headers = {"Accept": "application/json"}
     response = requests.post(url, headers=headers, auth=get_auth(), data=data) # TT Docs assert Updates are often POST to the entity URL rather than actual PUT
-    response.raise_for_status()
+    if not response.ok:
+        # Surface the actual Ticket Tailor error message
+        try:
+            err_body = response.json()
+            tt_message = err_body.get("message") or err_body.get("error") or str(err_body)
+        except Exception:
+            tt_message = response.text or f"HTTP {response.status_code}"
+        raise requests.HTTPError(
+            f"Ticket Tailor API [{response.status_code}]: {tt_message}",
+            response=response,
+        )
     return response.json()
 
 def delete_from_tt(endpoint: str):

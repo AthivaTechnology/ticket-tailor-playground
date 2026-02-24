@@ -17,12 +17,70 @@ class EventCreate(BaseModel):
     private: Optional[bool] = False
     event_series_id: Optional[str] = None
 
+@router.get("/public")
+def list_public_events():
+    """
+    Returns a flat list of upcoming event occurrences enriched with their
+    parent Event Series data (name, description, images, venue, tickets).
+
+    This is the primary endpoint for the user-facing events page.
+    It merges: Event Series master data + individual event occurrences.
+    """
+    try:
+        # 1. Fetch all event series
+        series_resp = fetch_from_tt("/event_series")
+        all_series = series_resp.get("data", [])
+
+        # 2. Fetch all event occurrences
+        events_resp = fetch_from_tt("/events")
+        all_events = events_resp.get("data", [])
+
+        # 3. Build a lookup map: series_id -> series data
+        series_map = {s["id"]: s for s in all_series}
+
+        # 4. Enrich each occurrence with its parent series data
+        enriched = []
+        for event in all_events:
+            series_id = event.get("event_series_id")
+            series = series_map.get(series_id, {})
+
+            # Only include published series
+            if series.get("status") not in ("published",):
+                continue
+
+            enriched.append({
+                # Core occurrence fields
+                "id": event.get("id"),
+                "event_series_id": series_id,
+                "start": event.get("start"),
+                "end": event.get("end"),
+                "status": event.get("status", series.get("status", "unknown")),
+                # Inherited from series
+                "name": series.get("name", event.get("name", "Untitled Event")),
+                "description": series.get("description", ""),
+                "images": series.get("images", {}),
+                "venue": series.get("venue", {}),
+                "online_event": series.get("online_event", "false"),
+                "checkout_url": event.get("checkout_url") or series.get("checkout_url", ""),
+                "ticket_types": event.get("ticket_types") or series.get("default_ticket_types", []),
+            })
+
+        # Sort by start date ascending
+        enriched.sort(key=lambda e: (e.get("start") or {}).get("iso", ""))
+
+        return {"data": enriched}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/")
 def list_events():
     try:
         return fetch_from_tt("/events")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/")
 def create_event(event: EventCreate):
@@ -43,15 +101,15 @@ def create_event(event: EventCreate):
             }
             if not event.online_event:
                 if event.venue_name:
-                    series_payload["venue_name"] = event.venue_name
+                    series_payload["venue"] = event.venue_name
                 if event.venue_postcode:
-                    series_payload["venue_postcode"] = event.venue_postcode
+                    series_payload["postal_code"] = event.venue_postcode
                 if event.venue_country:
-                    series_payload["venue_country"] = event.venue_country
+                    series_payload["country"] = event.venue_country.strip().upper()[:2]
             else:
                 # Store zoom/meet link as venue_name as workaround
                 if event.venue_name:
-                    series_payload["venue_name"] = event.venue_name
+                    series_payload["venue"] = event.venue_name
 
             series_data = post_to_tt("/event_series", series_payload)
             series_id = series_data.get("id")
@@ -131,6 +189,7 @@ def update_event(event_id: str, event: EventCreate):
             "name": event.name,
             "description": event.description
         }
+        
         from services.ticket_tailor import put_to_tt
         put_to_tt(f"/event_series/{series_id}", series_payload)
 

@@ -288,7 +288,7 @@ const AdminEventDetail = () => {
                                         <td className="p-4 font-bold text-white">{t.name}</td>
                                         <td className="p-4">
                                             {t.price > 0
-                                                ? <span className="text-brand-300 font-medium">₹{(t.price / 100).toFixed(2)}</span>
+                                                ? <span className="text-brand-300 font-medium">${(t.price / 100).toFixed(2)}</span>
                                                 : <span className="text-green-400 font-medium text-xs uppercase tracking-wider bg-green-500/10 px-2 py-1 rounded">Free</span>
                                             }
                                         </td>

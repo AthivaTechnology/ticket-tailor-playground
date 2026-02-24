@@ -5,7 +5,7 @@ import api from '../../services/api';
 
 const Events = () => {
     const [events, setEvents] = useState([]);
-    const [formData, setFormData] = useState({ name: '', description: '', venue_name: '', venue_postcode: '', venue_country: 'India', start: '', end: '', online_event: false, private: false, event_series_id: '' });
+    const [formData, setFormData] = useState({ name: '', description: '', venue_name: '', venue_postcode: '', venue_country: 'US', start: '', end: '', online_event: false, private: false, event_series_id: '' });
     const [loading, setLoading] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -51,7 +51,7 @@ const Events = () => {
                 newFormData.venue_name = 'Google Meet';
             }
         } else {
-            newFormData.venue_country = newFormData.venue_country || 'India';
+            newFormData.venue_country = newFormData.venue_country || 'US';
             if (['Google Meet', 'Zoom', 'YouTube Live'].includes(newFormData.venue_name)) {
                 newFormData.venue_name = '';
             }
@@ -72,7 +72,7 @@ const Events = () => {
 
             // Retain the series_id if we have one so subsequent events stay in the series
             const currentSeriesId = formData.event_series_id;
-            setFormData({ name: '', description: '', venue_name: '', venue_postcode: '', venue_country: 'India', start: '', end: '', online_event: false, private: false, event_series_id: currentSeriesId });
+            setFormData({ name: '', description: '', venue_name: '', venue_postcode: '', venue_country: 'US', start: '', end: '', online_event: false, private: false, event_series_id: currentSeriesId });
             setEditingId(null);
             fetchEvents();
         } catch (err) {
@@ -95,7 +95,7 @@ const Events = () => {
             description: event.description || '',
             venue_name: event.venue?.name || '',
             venue_postcode: event.venue?.postal_code || '',
-            venue_country: event.venue?.country || 'India',
+            venue_country: event.venue?.country || 'US',
             start: formatForInput(event.start?.iso),
             end: formatForInput(event.end?.iso),
             online_event: event.online_event === 'true',
@@ -127,7 +127,7 @@ const Events = () => {
                     </h2>
                     {editingId && (
                         <button
-                            onClick={() => { setEditingId(null); setFormData({ name: '', description: '', venue_name: '', venue_postcode: '', venue_country: 'India', start: '', end: '', online_event: false, private: false, event_series_id: '' }); }}
+                            onClick={() => { setEditingId(null); setFormData({ name: '', description: '', venue_name: '', venue_postcode: '', venue_country: 'US', start: '', end: '', online_event: false, private: false, event_series_id: '' }); }}
                             className="text-sm text-gray-400 hover:text-white"
                         >
                             Cancel Edit
@@ -180,7 +180,10 @@ const Events = () => {
                                     </div>
                                     <div>
                                         <label className="label-styled">Country</label>
-                                        <input name="venue_country" type="text" className="input-styled" placeholder="e.g. India" value={formData.venue_country} onChange={handleChange} required />
+                                        <select name="venue_country" className="input-styled" value={formData.venue_country} onChange={handleChange} required>
+                                            <option value="US">United States (US)</option>
+                                            <option value="IN">India (IN)</option>
+                                        </select>
                                     </div>
                                 </div>
                             )}

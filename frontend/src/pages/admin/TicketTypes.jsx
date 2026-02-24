@@ -172,7 +172,7 @@ const TicketTypes = () => {
                         </div>
                         {formData.type === 'paid' && (
                             <div>
-                                <label className="label-styled">Price (₹)</label>
+                                <label className="label-styled">Price ($)</label>
                                 <input name="price" type="number" className="input-styled" placeholder="499" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} required min="1" />
                             </div>
                         )}
@@ -244,7 +244,7 @@ const TicketTypes = () => {
                             return (
                                 <tr key={t.id} className="hover:bg-white/5">
                                     <td className="p-4 font-medium">{t.name}</td>
-                                    <td className="p-4">{t.price > 0 ? `₹${(t.price / 100).toFixed(2)}` : <span className="text-green-400 font-medium">Free</span>}</td>
+                                    <td className="p-4">{t.price > 0 ? `$${(t.price / 100).toFixed(2)}` : <span className="text-green-400 font-medium">Free</span>}</td>
                                     <td className="p-4">{t.quantity} <span className="text-gray-500 text-sm ml-2">(Max {t.max_per_order})</span></td>
                                     <td className="p-4 text-sm text-gray-400">{eventDisplay}</td>
                                     <td className="p-4">
@@ -323,7 +323,7 @@ const TicketTypes = () => {
                                                                     <div key={t.id} className="bg-dark-800/80 p-4 rounded-lg border border-white/5 hover:border-brand-500/30 transition-colors">
                                                                         <div className="flex justify-between items-start mb-2">
                                                                             <span className="font-bold text-white">{t.name}</span>
-                                                                            <span className="text-sm font-medium">{t.price > 0 ? `₹${(t.price / 100).toFixed(2)}` : <span className="text-green-400">Free</span>}</span>
+                                                                            <span className="text-sm font-medium">{t.price > 0 ? `$${(t.price / 100).toFixed(2)}` : <span className="text-green-400">Free</span>}</span>
                                                                         </div>
                                                                         <div className="flex items-center gap-4 text-xs text-gray-400 mt-4 bg-dark-900 p-2 rounded">
                                                                             <div className="flex flex-col"><span className="text-gray-500">Total</span><span className="font-bold text-gray-300">{t.quantity_total || t.quantity || 0}</span></div>

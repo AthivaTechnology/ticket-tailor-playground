@@ -18,6 +18,9 @@ import CheckInScanner from './pages/admin/CheckInScanner';
 import UserEvents from './pages/user/EventsList';
 import UserEventDetail from './pages/user/EventDetail';
 import EventCheckout from './pages/user/EventCheckout';
+import PaymentSuccess from './pages/user/PaymentSuccess';
+import PaymentCancel from './pages/user/PaymentCancel';
+import FreeConfirmPage from './pages/user/FreeConfirmPage';
 
 const App = () => {
   return (
@@ -38,13 +41,18 @@ const App = () => {
 
         {/* User Routes */}
         <Route path="/" element={<UserLayout />}>
-          <Route index element={<Navigate to="/series" replace />} />
-          <Route path="events" element={<Navigate to="/series" replace />} />
-          <Route path="events/:id" element={<Navigate to="/series" replace />} />
-          <Route path="series" element={<UserEvents />} />
-          <Route path="series/:id" element={<UserEventDetail />} />
+          <Route index element={<Navigate to="/events" replace />} />
+          {/* Redirect old /series paths to /events */}
+          <Route path="series" element={<Navigate to="/events" replace />} />
+          <Route path="series/:id" element={<Navigate to="/events" replace />} />
+          {/* Main event routes */}
+          <Route path="events" element={<UserEvents />} />
+          <Route path="events/:id" element={<UserEventDetail />} />
           <Route path="checkout/:id" element={<EventCheckout />} />
-          <Route path="*" element={<Navigate to="/series" replace />} />
+          <Route path="payment/success" element={<PaymentSuccess />} />
+          <Route path="payment/cancel" element={<PaymentCancel />} />
+          <Route path="payment/free-confirm" element={<FreeConfirmPage />} />
+          <Route path="*" element={<Navigate to="/events" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,280 +1,270 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, Tag as TagIcon, ArrowRight, Ticket } from 'lucide-react';
+import {
+    Calendar, MapPin, Ticket, ArrowLeft, ArrowRight,
+    Clock, Globe, Tag as TagIcon, Users
+} from 'lucide-react';
 import api from '../../services/api';
 
+import eventPlaceholder from '../../assets/event-placeholder.jpg';
+
 const EventDetail = () => {
-    const { id } = useParams(); // This is now the Series ID
+    const { id } = useParams(); // Event (occurrence) ID directly
     const navigate = useNavigate();
-    const [series, setSeries] = useState(null);
-    const [occurrences, setOccurrences] = useState([]);
-    const [selectedOccurrenceId, setSelectedOccurrenceId] = useState('');
-    const [bundles, setBundles] = useState([]);
+
+    const [event, setEvent] = useState(null);
+    const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [availableTickets, setAvailableTickets] = useState([]);
     const [ticketsLoading, setTicketsLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
 
     useEffect(() => {
-        fetchSeriesData();
+        if (id) fetchEventData();
     }, [id]);
 
-    const fetchSeriesData = async () => {
+    const fetchEventData = async () => {
         setLoading(true);
+        setErrorMsg('');
         try {
-            // 1. Fetch Series master data
-            const seriesRes = await api.get(`/event_series/${id}`);
-            setSeries(seriesRes.data);
+            // /events/:id already returns full data: name, images, venue, ticket_types
+            const eventRes = await api.get(`/events/${id}`);
+            setEvent(eventRes.data);
 
-            // 2. Fetch all generic Events (occurrences) and filter to this series
-            const eventsRes = await api.get('/events');
-            const matchingOccurrences = (eventsRes.data.data || []).filter(e => e.event_series_id === id);
-
-            // Sort occurrences chronologically
-            matchingOccurrences.sort((a, b) => new Date(a.start.iso) - new Date(b.start.iso));
-            setOccurrences(matchingOccurrences);
-
-            if (matchingOccurrences.length > 0) {
-                setSelectedOccurrenceId(matchingOccurrences[0].id);
+            // Fetch tickets for this event
+            setTicketsLoading(true);
+            try {
+                const ticketRes = await api.get(`/events/${id}/tickets`);
+                setTickets(ticketRes.data.data || []);
+            } catch {
+                setTickets([]);
             }
+            setTicketsLoading(false);
 
         } catch (err) {
             console.error(err);
+            setErrorMsg('Event not found or could not be loaded.');
         }
         setLoading(false);
     };
 
-    useEffect(() => {
-        const fetchTickets = async () => {
-            if (!selectedOccurrenceId) return;
-            setTicketsLoading(true);
-            try {
-                const res = await api.get(`/events/${selectedOccurrenceId}/tickets`);
-                setAvailableTickets(res.data.data || []);
-            } catch (err) {
-                console.error("Failed to fetch event ticket inventory", err);
-                setAvailableTickets([]);
-            }
+    if (loading) {
+        return <div className="text-center py-20 text-brand-300 animate-pulse text-xl">Loading Event...</div>;
+    }
 
-            // Fetch Bundles filtered to this specific occurrence
-            try {
-                const bundleRes = await api.get(`/event_series/${id}/bundles/availability?event_id=${selectedOccurrenceId}`);
-                setBundles(bundleRes.data.data || []);
-            } catch (bErr) {
-                console.warn("No bundles found or supported:", bErr);
-                setBundles([]);
-            }
+    if (errorMsg || !event) {
+        return (
+            <div className="text-center py-20">
+                <p className="text-red-400 text-xl mb-4">{errorMsg || 'Event not found.'}</p>
+                <button onClick={() => navigate('/events')} className="btn-secondary">
+                    ← Back to Events
+                </button>
+            </div>
+        );
+    }
 
-            setTicketsLoading(false);
-        };
-        fetchTickets();
-    }, [selectedOccurrenceId]);
+    const isOnline = event.online_event === 'true' || event.online_event === true;
+    const venue = isOnline
+        ? `🌐 Online Event`
+        : [event.venue?.name, event.venue?.city, event.venue?.postal_code, event.venue?.country]
+            .filter(Boolean).join(', ') || 'Location TBA';
 
-    if (loading) return <div className="text-center py-20 text-brand-300 animate-pulse text-xl">Loading Event Series...</div>;
-    if (!series) return <div className="text-center py-20 text-red-400">Event Series not found.</div>;
+    const isSoldOut = event.status === 'sold_out';
+    const hasTickets = tickets.length > 0;
+    const minPrice = hasTickets
+        ? Math.min(...tickets.filter(t => t.status !== 'sold_out').map(t => t.price || 0))
+        : null;
 
-    const selectedOccurrenceObj = occurrences.find(o => o.id === selectedOccurrenceId);
+    // Helper to format descriptions
+    const formatDescription = (desc) => {
+        if (!desc) return '';
+        // If it already looks like HTML, return as is
+        if (/<[a-z][\s\S]*>/i.test(desc)) return desc;
+        // Otherwise, convert newlines to <br/> tags to preserve alignment
+        return desc.replace(/\n/g, '<br />');
+    };
 
     return (
-        <div className="max-w-4xl mx-auto py-8">
-            {/* Hero Section */}
-            <div className="glass-card overflow-hidden mb-12 relative">
-                {series.images?.header && (
-                    <img src={series.images.header} alt="Header" className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-overlay" />
-                )}
-                <div className="h-64 bg-gradient-to-r from-brand-600 to-dark-900 absolute inset-0 opacity-40"></div>
-                <div className="relative z-10 p-10 flex flex-col items-center text-center">
-                    <span className="bg-brand-500/20 text-brand-300 font-bold px-4 py-1 rounded-full text-sm mb-6 inline-block uppercase tracking-wider">
-                        {series.status === 'published' ? 'Live Event Series' : 'Draft'}
-                    </span>
-                    <h1 className="text-5xl font-bold mb-6">{series.name}</h1>
+        <div className="max-w-4xl mx-auto py-8 px-4">
 
+            {/* Back button */}
+            <button
+                onClick={() => navigate('/events')}
+                className="flex items-center text-gray-400 hover:text-white mb-6 transition-colors"
+            >
+                <ArrowLeft className="w-4 h-4 mr-2" /> All Events
+            </button>
+
+            {/* Hero */}
+            <div className="glass-card overflow-hidden mb-8 relative">
+                <img
+                    src={event.images?.header || event.images?.thumbnail || eventPlaceholder}
+                    alt={event.name}
+                    className="absolute inset-0 w-full h-full object-cover opacity-30"
+                />
+                <div className="h-64 bg-gradient-to-r from-brand-700/60 to-dark-900 absolute inset-0" />
+
+                <div className="relative z-10 p-10 flex flex-col items-center text-center">
+                    {/* Status badge */}
+                    <span className={`font-bold px-4 py-1 rounded-full text-sm mb-4 inline-block uppercase tracking-wider ${isSoldOut
+                        ? 'bg-red-500/20 text-red-300'
+                        : 'bg-green-500/20 text-green-300'
+                        }`}>
+                        {isSoldOut ? 'Sold Out' : 'Tickets Available'}
+                    </span>
+
+                    <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white">{event.name}</h1>
+
+                    {/* Key info row */}
                     <div className="flex flex-wrap justify-center gap-6 text-gray-300 font-medium">
+                        {event.start?.iso && (
+                            <div className="flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-brand-400" />
+                                <span>{new Date(event.start.iso).toLocaleDateString([], { dateStyle: 'long' })}</span>
+                            </div>
+                        )}
+                        {event.start?.iso && (
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-brand-400" />
+                                <span>{new Date(event.start.iso).toLocaleTimeString([], { timeStyle: 'short' })}
+                                    {event.end?.iso && ` – ${new Date(event.end.iso).toLocaleTimeString([], { timeStyle: 'short' })}`}
+                                </span>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-brand-400" />
-                            <span>
-                                {series.online_event === "true"
-                                    ? `🌐 Online Event (${series.venue?.name || 'Link Pending'})`
-                                    : [series.venue?.name, series.venue?.postal_code, series.venue?.country].filter(Boolean).join(', ') || 'Various Locations'
-                                }
-                            </span>
+                            <span>{venue}</span>
                         </div>
+                        {minPrice !== null && (
+                            <div className="flex items-center gap-2">
+                                <TagIcon className="w-5 h-5 text-brand-400" />
+                                <span>{minPrice === 0 ? 'Free' : `From $${(minPrice / 100).toFixed(2)}`}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+            {/* Main content grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                {/* Left — Description */}
                 <div className="md:col-span-2 space-y-6">
-                    <h2 className="text-3xl font-bold border-b border-white/10 pb-4">About the Series</h2>
-                    <div className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: series.description || 'No description provided for this series.' }} />
+                    <div className="glass-card p-8">
+                        <h2 className="text-2xl font-bold mb-4 text-white border-b border-white/10 pb-4">
+                            About This Event
+                        </h2>
+                        {event.description ? (
+                            <div
+                                className="text-gray-300 leading-relaxed text-base prose prose-invert prose-brand max-w-none break-words"
+                                dangerouslySetInnerHTML={{ __html: formatDescription(event.description) }}
+                            />
+                        ) : (
+                            <p className="text-gray-400 italic">No description provided.</p>
+                        )}
+                    </div>
+
+                    {/* Venue details (if physical) */}
+                    {!isOnline && event.venue && (
+                        <div className="glass-card p-6">
+                            <h3 className="text-lg font-bold mb-3 text-white flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-brand-400" /> Venue
+                            </h3>
+                            <p className="text-gray-300 font-medium">{event.venue.name}</p>
+                            {event.venue.address && <p className="text-gray-400 text-sm mt-1">{event.venue.address}</p>}
+                            <p className="text-gray-400 text-sm">
+                                {[event.venue.city, event.venue.postal_code, event.venue.country].filter(Boolean).join(', ')}
+                            </p>
+                        </div>
+                    )}
                 </div>
 
-                <div className="space-y-6">
-                    <div className="glass-card p-6 border-brand-500/30 border-2">
-                        <h3 className="text-2xl font-bold text-brand-300 mb-6 flex items-center gap-2">
-                            <Calendar className="w-6 h-6" /> Event Date
+                {/* Right — Tickets + CTA */}
+                <div className="space-y-5">
+
+                    {/* Tickets card */}
+                    <div className="glass-card p-6 border-2 border-brand-500/30 sticky top-8">
+                        <h3 className="text-xl font-bold text-brand-300 mb-5 flex items-center gap-2">
+                            <Ticket className="w-5 h-5" /> Tickets
                         </h3>
 
-                        {occurrences.length > 0 ? (
-                            <div>
-                                <label className="label-styled block mb-2">Select Occurrence</label>
-                                <select
-                                    className="input-styled w-full"
-                                    value={selectedOccurrenceId}
-                                    onChange={(e) => setSelectedOccurrenceId(e.target.value)}
-                                >
-                                    {occurrences.map(o => (
-                                        <option key={o.id} value={o.id}>
-                                            {new Date(o.start.iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                                        </option>
-                                    ))}
-                                </select>
+                        {/* Ticket list */}
+                        {ticketsLoading ? (
+                            <div className="space-y-2 animate-pulse">
+                                <div className="h-14 bg-white/5 rounded-xl" />
+                                <div className="h-14 bg-white/5 rounded-xl" />
                             </div>
-                        ) : (
-                            <p className="text-gray-400 text-sm mb-4">No occurrences found for this series.</p>
-                        )}
-
-                        {/* Series Ticket Bundles */}
-                        {bundles.length > 0 && (
-                            <div className="mt-8 mb-8">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <TagIcon className="w-3.5 h-3.5" /> Ticket Bundles
-                                </h4>
-                                <div className="space-y-3">
-                                    {bundles.map(bundle => (
-                                        <div key={bundle.id} className={`rounded-xl border p-4 transition-all ${bundle.is_available
-                                            ? 'bg-indigo-950/40 border-indigo-500/30 hover:border-indigo-400/60'
-                                            : 'bg-dark-900/30 border-white/5 opacity-60'
-                                            }`}>
-                                            {/* Bundle Header */}
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <p className="font-bold text-white text-sm">{bundle.name}</p>
-                                                    {bundle.description && (
-                                                        <p className="text-xs text-indigo-300/70 mt-0.5">{bundle.description}</p>
-                                                    )}
+                        ) : hasTickets ? (
+                            <div className="space-y-2 mb-6">
+                                {tickets.map(ticket => {
+                                    const tSoldOut = ticket.status === 'sold_out';
+                                    return (
+                                        <div
+                                            key={ticket.id}
+                                            className={`flex items-center justify-between p-3 rounded-xl border transition-all ${tSoldOut
+                                                ? 'bg-dark-900/30 border-white/5 opacity-60'
+                                                : 'bg-dark-800/60 border-white/10 hover:border-brand-500/30'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2.5">
+                                                <div className={`p-1.5 rounded-lg ${tSoldOut ? 'bg-gray-500/10 text-gray-500'
+                                                    : ticket.price > 0 ? 'bg-brand-500/15 text-brand-400'
+                                                        : 'bg-green-500/15 text-green-400'
+                                                    }`}>
+                                                    <Ticket className="w-3.5 h-3.5" />
                                                 </div>
-                                                {bundle.is_available ? (
-                                                    <span className="shrink-0 ml-2 text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full">
-                                                        {bundle.max_quantity} left
-                                                    </span>
+                                                <div>
+                                                    <p className={`text-sm font-semibold ${tSoldOut ? 'text-gray-500 line-through' : 'text-white'}`}>
+                                                        {ticket.name}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400">
+                                                        {ticket.price > 0 ? `$${(ticket.price / 100).toFixed(2)}` : 'Free'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-0.5">
+                                                {tSoldOut ? (
+                                                    <span className="text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full uppercase">Sold Out</span>
                                                 ) : (
-                                                    <span className="shrink-0 ml-2 text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">
-                                                        Sold Out
-                                                    </span>
+                                                    <>
+                                                        <span className="text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full">Available</span>
+                                                        {ticket.quantity != null && (
+                                                            <span className="text-[10px] text-gray-500">{ticket.quantity} left</span>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
-
-                                            {/* Included Tickets */}
-                                            {bundle.included_tickets_details && bundle.included_tickets_details.length > 0 && (
-                                                <div className="bg-indigo-900/20 rounded-lg p-2.5 mb-3 space-y-1.5">
-                                                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1.5">Includes</p>
-                                                    {bundle.included_tickets_details.map(t => (
-                                                        <div key={t.id} className="flex items-center justify-between text-xs">
-                                                            <div className="flex items-center gap-1.5 text-indigo-200">
-                                                                <span className="w-4 h-4 flex items-center justify-center bg-indigo-500/20 rounded text-indigo-400 text-[10px] font-bold">×{t.quantity}</span>
-                                                                <span>{t.name}</span>
-                                                            </div>
-                                                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${t.left > 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                                                                {t.left > 0 ? `${t.left} left` : 'None left'}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* Price */}
-                                            <p className="text-sm font-bold text-brand-300">
-                                                {bundle.price > 0 ? `₹${(bundle.price / 100).toFixed(2)}` : 'Free'}
-                                            </p>
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
+                        ) : (
+                            <p className="text-sm text-gray-500 italic text-center py-4 mb-4">
+                                No tickets available.
+                            </p>
                         )}
 
-                        {/* Ticket Inventory Preview */}
-                        {selectedOccurrenceId && (
-                            <div className="mt-4">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Ticket className="w-3.5 h-3.5" /> Available Tickets
-                                </h4>
-                                {ticketsLoading ? (
-                                    <div className="animate-pulse space-y-2">
-                                        <div className="h-14 bg-white/5 rounded-xl"></div>
-                                        <div className="h-14 bg-white/5 rounded-xl"></div>
-                                    </div>
-                                ) : availableTickets.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {availableTickets.map(ticket => {
-                                            const isSoldOut = ticket.status === 'sold_out';
-                                            const qty = ticket.quantity ?? null;
-                                            return (
-                                                <div key={ticket.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isSoldOut
-                                                    ? 'bg-dark-900/30 border-white/5 opacity-60'
-                                                    : 'bg-dark-800/60 border-white/8 hover:border-brand-500/30'
-                                                    }`}>
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className={`p-1.5 rounded-lg ${isSoldOut ? 'bg-gray-500/10 text-gray-500'
-                                                            : ticket.price > 0 ? 'bg-brand-500/15 text-brand-400'
-                                                                : 'bg-green-500/15 text-green-400'
-                                                            }`}>
-                                                            <Ticket className="w-4 h-4" />
-                                                        </div>
-                                                        <div>
-                                                            <p className={`text-sm font-semibold leading-tight ${isSoldOut ? 'text-gray-500 line-through' : 'text-white'}`}>{ticket.name}</p>
-                                                            <p className="text-xs text-gray-400">{ticket.price > 0 ? `₹${(ticket.price / 100).toFixed(2)}` : 'Free'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-1">
-                                                        {isSoldOut ? (
-                                                            <span className="text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">Sold Out</span>
-                                                        ) : (
-                                                            <>
-                                                                <span className="text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full">Available</span>
-                                                                {qty !== null && (
-                                                                    <span className="text-[10px] text-gray-400">{qty} left</span>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-gray-500 italic text-center py-4 bg-dark-900 rounded-xl border border-white/5">No tickets found for this date.</p>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="mt-8 pt-6 border-t border-white/10 flex flex-col items-center gap-4">
-                            {selectedOccurrenceObj ? (
-                                <div className="flex flex-col sm:flex-row w-full gap-4">
-                                    <a
-                                        href={selectedOccurrenceObj.checkout_url || selectedOccurrenceObj.url}
-                                        className="w-full sm:w-1/2 flex justify-center items-center gap-3 bg-dark-700 hover:bg-dark-600 border border-white/10 text-white font-bold text-base px-6 py-4 rounded-xl transition-all duration-300"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        <TagIcon className="w-5 h-5" /> Ticket Tailor Checkout
-                                    </a>
-                                    <button
-                                        onClick={() => navigate(`/checkout/${selectedOccurrenceId}`)}
-                                        className="w-full sm:w-1/2 flex justify-center items-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold text-base px-6 py-4 rounded-xl shadow-[0_4px_20px_rgba(37,99,235,0.3)] hover:-translate-y-0.5 transition-all duration-300"
-                                    >
-                                        <TagIcon className="w-5 h-5" /> Custom Onsite Checkout
-                                    </button>
-                                </div>
+                        {/* CTA */}
+                        <div className="pt-4 border-t border-white/10 space-y-3">
+                            {!isSoldOut && hasTickets ? (
+                                <button
+                                    onClick={() => navigate(`/checkout/${id}`)}
+                                    className="w-full flex justify-center items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white font-bold text-base px-6 py-4 rounded-xl shadow-[0_4px_20px_rgba(37,99,235,0.3)] hover:-translate-y-0.5 transition-all duration-300"
+                                >
+                                    <Ticket className="w-5 h-5" />
+                                    Get Tickets
+                                    <ArrowRight className="w-4 h-4" />
+                                </button>
                             ) : (
-                                <div className="w-full flex justify-center items-center gap-2 bg-gray-600/50 cursor-not-allowed text-gray-400 font-bold text-sm px-6 py-4 rounded-xl border border-white/5">
-                                    <TagIcon className="w-4 h-4" /> Select Date First
+                                <div className="w-full flex justify-center items-center gap-2 bg-gray-600/40 cursor-not-allowed text-gray-400 font-bold text-sm px-6 py-4 rounded-xl border border-white/5">
+                                    {isSoldOut ? '🚫 Sold Out' : 'No Tickets Available'}
                                 </div>
                             )}
+
                         </div>
                     </div>
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 };
 

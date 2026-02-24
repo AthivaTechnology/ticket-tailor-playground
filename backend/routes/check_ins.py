@@ -20,13 +20,25 @@ def get_ticket_status(ticket_id: str):
                 raise HTTPException(status_code=404, detail="Barcode not found.")
             ticket_data = results[0]
 
-        # 2. Fetch the parent order to get the actual Buyer Name and Email
-        # (Ticket Tailor masks attendee info with **** if not explicitly collected per ticket)
+        # 2. Extract unmasked PII from reference field if available (Workaround for TT masking)
+        ref = ticket_data.get("reference")
+        if ref and "|" in ref:
+            try:
+                ref_name, ref_email = ref.split("|", 1)
+                if ref_name:
+                    ticket_data["full_name"] = ref_name
+                if ref_email:
+                    ticket_data["email"] = ref_email
+            except Exception:
+                pass
+
+        # 3. Fallback: Fetch the parent order if details are still missing/masked
         order_id = ticket_data.get("order_id")
         buyer_name = None
         buyer_email = None
         
-        if order_id:
+        # Only check order if ticket info is still masked/missing
+        if order_id and ("****" in str(ticket_data.get("full_name", "")) or "****" in str(ticket_data.get("email", ""))):
             try:
                 order_data = fetch_from_tt(f"/orders/{order_id}")
                 buyer_name = order_data.get("buyer_name")
@@ -36,12 +48,18 @@ def get_ticket_status(ticket_id: str):
 
         # Inject the real buyer details so the scanner UI can display them
         current_name = ticket_data.get("full_name")
-        if not current_name or current_name == "****":
-            ticket_data["full_name"] = buyer_name if buyer_name else "Guest Attendee"
+        if not current_name or current_name == "****" or "Guest" in str(current_name):
+            if buyer_name and "****" not in str(buyer_name):
+                ticket_data["full_name"] = buyer_name
+            elif not current_name or current_name == "****":
+                ticket_data["full_name"] = "Guest Attendee"
             
         current_email = ticket_data.get("email")
-        if not current_email or current_email == "****":
-            ticket_data["email"] = buyer_email if buyer_email else "No Email Provided"
+        if not current_email or current_email == "****" or "No Email" in str(current_email):
+            if buyer_email and "****" not in str(buyer_email):
+                ticket_data["email"] = buyer_email
+            elif not current_email or current_email == "****":
+                ticket_data["email"] = "No Email Provided"
 
         return ticket_data
     except HTTPException:

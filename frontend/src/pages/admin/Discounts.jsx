@@ -204,7 +204,7 @@ const Discounts = () => {
                                         </td>
                                         <td className="p-4">
                                             <span className="text-2xl font-bold text-white">
-                                                {d.type === 'percentage' ? `${d.face_value_percentage}%` : `₹${(d.face_value_amount / 100).toFixed(2)}`}
+                                                {d.type === 'percentage' ? `${d.face_value_percentage}%` : `$${(d.face_value_amount / 100).toFixed(2)}`}
                                             </span>
                                             <span className="text-xs text-gray-500 ml-2">off</span>
                                         </td>
