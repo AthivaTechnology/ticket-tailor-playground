@@ -21,11 +21,14 @@ import EventCheckout from './pages/user/EventCheckout';
 import PaymentSuccess from './pages/user/PaymentSuccess';
 import PaymentCancel from './pages/user/PaymentCancel';
 import FreeConfirmPage from './pages/user/FreeConfirmPage';
+import FrontendFlowChart from './pages/FrontendFlowChart';
 
 const App = () => {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Standalone — no layout wrapper */}
+        <Route path="/frontend-flow" element={<FrontendFlowChart />} />
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/event-series" replace />} />
