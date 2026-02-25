@@ -6,7 +6,7 @@ const UserLayout = () => {
         <div className="min-h-screen flex flex-col">
             <header className="glass-card m-4 px-6 py-4 flex items-center justify-between sticky top-4 z-50">
                 <Link to="/events" className="text-2xl font-bold bg-gradient-to-r from-brand-300 to-brand-500 bg-clip-text text-transparent">
-                    Athiva Tickets
+                    Ticket Tailor API
                 </Link>
                 <nav className="hidden md:block">
                     <Link to="/events" className="text-gray-300 hover:text-white transition-colors mr-6">Events</Link>
