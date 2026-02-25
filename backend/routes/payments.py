@@ -199,8 +199,8 @@ def create_checkout_session(body: CreateCheckoutSessionRequest):
             line_items=line_items,
             mode="payment",
             customer_email=body.buyer_email,
-            success_url=f"{FRONTEND_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{FRONTEND_URL}/payment/cancel",
+            success_url=f"{FRONTEND_URL}payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{FRONTEND_URL}payment/cancel",
             metadata=metadata,
             billing_address_collection="auto",
 
