@@ -27,7 +27,7 @@ def _build_html(buyer_name, event_name, event_date, event_venue, tickets, amount
 
     # Format amount
     if amount_total and int(amount_total) > 0:
-        amt_display = f"₹{int(amount_total) / 100:,.2f}"
+        amt_display = f"${int(amount_total) / 100:,.2f}"
     else:
         amt_display = "FREE"
 
