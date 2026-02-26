@@ -57,6 +57,19 @@ def list_orders():
     try:
         tickets = _fetch_all_issued_tickets()
 
+        # Fetch events and series to map event_id to event_name
+        events_resp = fetch_from_tt("/events")
+        all_events = events_resp.get("data", [])
+        
+        series_resp = fetch_from_tt("/event_series")
+        all_series = {s["id"]: s for s in series_resp.get("data", [])}
+        
+        event_map = {}
+        for e in all_events:
+            series = all_series.get(e.get("event_series_id"), {})
+            # Prefer series name, fallback to event name, then default
+            event_map[e["id"]] = series.get("name") or e.get("name") or "Unknown Event"
+
         # Group tickets by email + event_id to form "orders"
         order_groups = defaultdict(list)
         for t in tickets:
@@ -136,6 +149,7 @@ def list_orders():
                 "buyer_email": buyer_email,
                 "phone": "",
                 "event_id": event_id,
+                "event_name": event_map.get(event_id, "Unknown Event"),
                 "total": total,
                 "source": source,
                 "status": "confirmed",

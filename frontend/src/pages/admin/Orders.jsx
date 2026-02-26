@@ -2,6 +2,122 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, ChevronDown, ChevronRight, Ticket, User, XCircle, RefreshCw, AlertTriangle, Clock } from 'lucide-react';
 import api from '../../services/api';
 
+const shortOrderId = (id) => {
+    if (!id) return 'UNKNOWN';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = ((hash << 5) - hash) + id.charCodeAt(i);
+        hash |= 0;
+    }
+    return "ORD-" + Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+};
+
+const OrderRowDetails = ({ order, handleCheckIn }) => {
+    // Group tickets by attendee email, fallback to full name or buyer details
+    const groupedTickets = React.useMemo(() => {
+        const groups = {};
+        if (!order.issued_tickets) return groups;
+
+        order.issued_tickets.forEach(ticket => {
+            const email = ticket.email || order.buyer_email || 'Guest';
+            const name = (ticket.full_name && ticket.full_name !== "****" ? ticket.full_name : null) || (order.buyer_name && order.buyer_name !== "****" ? order.buyer_name : null) || 'Guest';
+
+            const key = email;
+            if (!groups[key]) {
+                groups[key] = {
+                    email,
+                    name,
+                    tickets: []
+                };
+            }
+            groups[key].tickets.push(ticket);
+        });
+        return groups;
+    }, [order]);
+
+    const groupKeys = Object.keys(groupedTickets);
+    const [selectedGroup, setSelectedGroup] = React.useState(groupKeys[0]);
+
+    React.useEffect(() => {
+        if (groupKeys.length > 0 && (!selectedGroup || !groupKeys.includes(selectedGroup))) {
+            setSelectedGroup(groupKeys[0]);
+        }
+    }, [groupKeys, selectedGroup]);
+
+    if (groupKeys.length === 0) {
+        return <p className="text-sm text-gray-500">No tickets found in this order.</p>;
+    }
+
+    const currentGroup = groupedTickets[selectedGroup] || groupedTickets[groupKeys[0]];
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 mt-2">
+            {/* Sidebar List of Users */}
+            <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col gap-2 max-h-[32rem] overflow-y-auto pr-2 custom-scrollbar">
+                {groupKeys.map(key => {
+                    const group = groupedTickets[key];
+                    const isSelected = selectedGroup === key;
+                    return (
+                        <div
+                            key={key}
+                            onClick={(e) => { e.stopPropagation(); setSelectedGroup(key); }}
+                            className={`p-3 rounded-xl cursor-pointer transition-all border ${isSelected ? 'bg-brand-500/20 border-brand-500 text-white shadow-[0_0_15px_rgba(20,184,166,0.1)]' : 'bg-dark-800 border-white/5 hover:border-white/20 text-gray-400'}`}
+                        >
+                            <div className="font-semibold text-sm truncate">{group.name}</div>
+                            <div className="text-xs opacity-70 truncate" title={group.email}>{group.email}</div>
+                            <div className="mt-2 text-xs font-bold text-brand-400 bg-brand-500/10 inline-block px-2.5 py-1 rounded-full">
+                                {group.tickets.length} Ticket{group.tickets.length !== 1 ? 's' : ''}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Tickets for Selected User */}
+            <div className="w-full md:w-2/3 lg:w-3/4">
+                <div className="mb-4">
+                    <h5 className="text-lg font-bold text-white mb-1">{currentGroup?.name}'s Tickets</h5>
+                    <p className="text-sm text-gray-400">{currentGroup?.email}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[32rem] overflow-y-auto pr-2 custom-scrollbar">
+                    {currentGroup?.tickets.map(ticket => {
+                        const isCheckedIn = ticket.checked_in === "true";
+                        const isVoided = ticket.status === "voided";
+                        return (
+                            <div key={ticket.id} className="bg-dark-800 border border-white/5 rounded-xl p-5 flex flex-col justify-between hover:border-white/10 transition-colors">
+                                <div>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <span className="font-mono text-xs text-brand-300 bg-brand-500/10 px-2 py-1 rounded">{ticket.barcode}</span>
+                                        {isVoided ? (
+                                            <span className="text-xs font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded flex items-center gap-1"><XCircle className="w-3 h-3" /> Voided</span>
+                                        ) : isCheckedIn ? (
+                                            <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-1 rounded flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Checked In</span>
+                                        ) : (
+                                            <span className="text-xs font-bold text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded">Pending</span>
+                                        )}
+                                    </div>
+                                    <p className="font-medium text-white text-sm mb-1 line-clamp-2">{ticket.description}</p>
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-white/5">
+                                    {!isCheckedIn && !isVoided ? (
+                                        <button onClick={(e) => { e.stopPropagation(); handleCheckIn(ticket.id); }} className="w-full flex items-center justify-center gap-2 text-sm btn-primary py-2.5">
+                                            <CheckCircle className="w-4 h-4" /> Check In Attendee
+                                        </button>
+                                    ) : (
+                                        <button disabled className="w-full text-sm bg-dark-600 text-gray-500 rounded-lg py-2.5 cursor-not-allowed">
+                                            {isVoided ? "Ticket Voided" : "Already Checked In"}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Orders = () => {
     const [orders, setOrders] = useState([]);
     const [pendingOrders, setPendingOrders] = useState([]);
@@ -121,18 +237,17 @@ const Orders = () => {
                         <thead className="bg-white/5 text-gray-400">
                             <tr>
                                 <th className="p-4 w-10"></th>
-                                <th className="p-4">Order ID</th>
-                                <th className="p-4">Buyer Name</th>
-                                <th className="p-4">Email</th>
+                                <th className="p-4">Order Ref</th>
+                                <th className="p-4">Event Name</th>
                                 <th className="p-4">Tickets</th>
                                 <th className="p-4">Total</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {loading ? (
-                                <tr><td colSpan="6" className="p-4 text-center text-gray-400 animate-pulse">Loading orders...</td></tr>
+                                <tr><td colSpan="5" className="p-4 text-center text-gray-400 animate-pulse">Loading orders...</td></tr>
                             ) : orders.length === 0 ? (
-                                <tr><td colSpan="6" className="p-8 text-center text-gray-500">
+                                <tr><td colSpan="5" className="p-8 text-center text-gray-500">
                                     No confirmed orders yet. Tickets appear here after Ticket Tailor billing is set up.
                                 </td></tr>
                             ) : orders.map(o => (
@@ -141,59 +256,19 @@ const Orders = () => {
                                         <td className="p-4">
                                             {expandedOrders.has(o.id) ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
                                         </td>
-                                        <td className="p-4 font-mono text-sm text-gray-400">{o.id}</td>
-                                        <td className="p-4 font-medium">{o.buyer_name || 'Guest'}</td>
-                                        <td className="p-4">{o.buyer_email || 'N/A'}</td>
+                                        <td className="p-4 font-mono text-xs text-gray-400" title={o.id}>
+                                            {shortOrderId(o.id)}
+                                        </td>
+                                        <td className="p-4 font-medium text-white">{o.event_name || 'Unknown Event'}</td>
                                         <td className="p-4 text-brand-300 font-bold">{o.issued_tickets?.length || 0}</td>
                                         <td className="p-4 font-medium text-green-400">${(o.total / 100).toFixed(2)}</td>
                                     </tr>
                                     {expandedOrders.has(o.id) && (
                                         <tr className="bg-black/20">
-                                            <td colSpan="6" className="p-0">
+                                            <td colSpan="5" className="p-0">
                                                 <div className="p-6 border-l-2 border-brand-500 ml-4 space-y-3">
                                                     <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Issued Tickets</h4>
-                                                    {!o.issued_tickets || o.issued_tickets.length === 0 ? (
-                                                        <p className="text-sm text-gray-500">No tickets found in this order.</p>
-                                                    ) : (
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            {o.issued_tickets.map(ticket => {
-                                                                const isCheckedIn = ticket.checked_in === "true";
-                                                                const isVoided = ticket.status === "voided";
-                                                                return (
-                                                                    <div key={ticket.id} className="bg-dark-800 border border-white/5 rounded-lg p-4 flex flex-col justify-between">
-                                                                        <div>
-                                                                            <div className="flex justify-between items-start mb-2">
-                                                                                <span className="font-mono text-xs text-brand-300 bg-brand-500/10 px-2 py-1 rounded">{ticket.barcode}</span>
-                                                                                {isVoided ? (
-                                                                                    <span className="text-xs font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded flex items-center gap-1"><XCircle className="w-3 h-3" /> Voided</span>
-                                                                                ) : isCheckedIn ? (
-                                                                                    <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-1 rounded flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Checked In</span>
-                                                                                ) : (
-                                                                                    <span className="text-xs font-bold text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded">Pending</span>
-                                                                                )}
-                                                                            </div>
-                                                                            <p className="font-medium text-white text-sm mb-1 line-clamp-2">{ticket.description}</p>
-                                                                            <div className="text-xs text-gray-400 flex items-center gap-1 mt-2">
-                                                                                <User className="w-3 h-3" />
-                                                                                {(ticket.full_name && ticket.full_name !== "****" ? ticket.full_name : null) || (o.buyer_name && o.buyer_name !== "****" ? o.buyer_name : null) || "Guest"}
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="mt-4 pt-4 border-t border-white/5">
-                                                                            {!isCheckedIn && !isVoided ? (
-                                                                                <button onClick={(e) => { e.stopPropagation(); handleCheckIn(ticket.id); }} className="w-full flex items-center justify-center gap-2 text-xs btn-primary py-2">
-                                                                                    <CheckCircle className="w-4 h-4" /> Check In Attendee
-                                                                                </button>
-                                                                            ) : (
-                                                                                <button disabled className="w-full text-xs bg-dark-600 text-gray-500 rounded-lg py-2 cursor-not-allowed">
-                                                                                    {isVoided ? "Ticket Voided" : "Already Checked In"}
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                    <OrderRowDetails order={o} handleCheckIn={handleCheckIn} />
                                                 </div>
                                             </td>
                                         </tr>

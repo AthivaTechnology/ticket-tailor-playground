@@ -19,7 +19,7 @@ const AdminLayout = () => {
             {/* Sidebar — fixed, never scrolls */}
             <aside className="w-64 flex-shrink-0 h-screen sticky top-0 glass-card m-4 mr-0 p-6 flex flex-col overflow-hidden">
                 <h2 className="text-2xl font-bold text-white mb-8 bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-transparent flex-shrink-0">
-                    Ticket Tailor OS
+                    Admin Side  
                 </h2>
                 <nav className="flex-1 space-y-2 overflow-y-auto">
                     {navItems.map((item) => (
